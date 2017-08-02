@@ -1,0 +1,603 @@
+---
+output: word_document
+---
+
+
+```{r load_data, include=FALSE}
+today.character <- as.character(as.Date(format(Sys.time(), "%Y-%m-%d")))
+setwd("F:/_SM/_SM-Felles/Utbrudd/Ebola 2014/Ebola_models_updated")
+source("F:/_SM/SMAO/Felles/autostat/Libraries/r_tools/r_tools.R")
+req(c("sfsmisc","deSolve","data.table","boot","rmarkdown","knitr","stringr","reshape","knitr","stringr","ggplot2"))
+#setwd("/Users/Hilde 2/Desktop/Ebola_models_updated")
+library(knitr)
+library(stringr)
+results <- readRDS("raw_estimates.RDS")
+results.table <- readRDS("table.RDS")
+
+today <- as.character(results[[1]]$date[results[[1]]$days.to.today==0][1])
+today.plus.28 <- as.character(results[[1]]$date[results[[1]]$days.to.today==28][1])
+today.plus.56 <- as.character(results[[1]]$date[results[[1]]$days.to.today==56][1])
+
+form <- function(est,dp){
+  return(format(round(est,dp),dp))
+}
+
+form_ci <- function(est,l95,u95,dp,res.95,res.95.spacer){
+  try(est <- form(est,dp),TRUE)
+  try(l95 <- form(l95,dp),TRUE)
+  try(u95 <- form(u95,dp),TRUE)
+  return(paste(est," (",res.95,l95,res.95.spacer,u95,")",sep=""))
+}
+
+res.95 <-"95% CI="
+res.95.spacer <-" to "
+
+guinea <- results[["guinea"]]
+guinea.R0 <- form(guinea$R0[guinea$type=="projection" & guinea$days.to.today==0],2)
+guinea.R0.l95 <- form(guinea$R0.l95[guinea$type=="projection" & guinea$days.to.today==0],2)
+guinea.R0.u95 <- form(guinea$R0.u95[guinea$type=="projection" & guinea$days.to.today==0],2)
+guinea.R0.res <- form_ci(guinea.R0,guinea.R0.l95,guinea.R0.u95,2,res.95,res.95.spacer)
+
+liberia <- results[["liberia"]]
+liberia.R0 <- form(liberia$R0[liberia$type=="projection" & liberia$days.to.today==0],2)
+liberia.R0.l95 <- form(liberia$R0.l95[liberia$type=="projection" & liberia$days.to.today==0],2)
+liberia.R0.u95 <- form(liberia$R0.u95[liberia$type=="projection" & liberia$days.to.today==0],2)
+liberia.R0.res <- form_ci(liberia.R0,liberia.R0.l95,liberia.R0.u95,2,res.95,res.95.spacer)
+
+sierra <- results[["sierra"]]
+sierra.R0 <- form(sierra$R0[sierra$type=="projection" & sierra$days.to.today==0],2)
+sierra.R0.l95 <- form(sierra$R0.l95[sierra$type=="projection" & sierra$days.to.today==0],2)
+sierra.R0.u95 <- form(sierra$R0.u95[sierra$type=="projection" & sierra$days.to.today==0],2)
+sierra.R0.res <- form_ci(sierra.R0,sierra.R0.l95,sierra.R0.u95,2,res.95,res.95.spacer)
+
+tt <- sierra[sierra$type=="historic",c("day","R0","days.to.today","date"),with=FALSE]
+
+tt$R0before <- NA
+tt$R0before[2:nrow(tt)] <- tt$R0[1:(nrow(tt)-1)]
+tt$R0after <- NA
+tt$R0after[1:(nrow(tt)-1)] <- tt$R0[2:nrow(tt)]
+tt$keep <- TRUE
+index <- tt$R0before!=tt$R0after
+index[is.na(index)] <- TRUE
+tt <- tt[index,]
+sentence <- c()
+for(i in 1:c(nrow(tt)/2)){
+  sentence <- c(sentence,paste(form(tt$R0[i*2-1],2)," from ",tt$date[i*2-1]," to ",tt$date[i*2],sep=""))
+}
+final.sentence <- "Reporting for the entire outbreak, the reproductive number was estimated to be "
+for(i in 1:(length(sentence)-1)){
+  final.sentence <- paste(final.sentence,sentence[i],", ",sep="")
+}
+ final.sentence <- paste(final.sentence,"and ",sentence[length(sentence)],".",sep="")
+
+sierra.R0.58 <- form(sierra$R0[sierra$type=="historic" & sierra$days.to.today==-58],2)
+sierra.R0.116 <- form(sierra$R0[sierra$type=="historic" & sierra$days.to.today==-116],2)
+sierra.R0.174 <- form(sierra$R0[sierra$type=="historic" & sierra$days.to.today==-174],2)
+
+total <- results[["sierra"]]
+total.today <- total[total$type=="projection" & total$days.to.today==0,]
+total.today.T.res <- form_ci(total.today$T,total.today$T.l95,total.today$T.u95,0,res.95,res.95.spacer)
+total.today.I.res <- form_ci(total.today$I,total.today$I.l95,total.today$I.u95,0,res.95,res.95.spacer)
+total.today.cdcETU.res <- form_ci(total.today$cdc25p.ETU,total.today$cdc25p.ETU.l95,total.today$cdc25p.ETU.u95,0,res.95,res.95.spacer)
+total.today.cdcreduced.res <- form_ci(total.today$cdc45p.reduced,total.today$cdc45p.reduced.l95,total.today$cdc45p.reduced.u95,0,res.95,res.95.spacer)
+total.today.newcases <- form(total.today$new.cases.estimated,0)
+total.today.treat <- form(total.today$cdc25p.ETU+total.today$cdc45p.reduced,0)
+total.today.cum <- form_ci(total.today$cases.estimated,total.today$cases.estimated.l95,total.today$cases.estimated.u95,0,res.95,res.95.spacer)
+
+total.28 <- total[total$type=="projection" & total$days.to.today==28,]
+total.28.cdcETU.res <- form_ci(total.28$cdc25p.ETU,total.28$cdc25p.ETU.l95,total.28$cdc25p.ETU.u95,0,res.95,res.95.spacer)
+total.28.cdcreduced.res <- form_ci(total.28$cdc45p.reduced,total.28$cdc45p.reduced.l95,total.28$cdc45p.reduced.u95,0,res.95,res.95.spacer)
+total.28.newcases <- form(total.28$new.cases.estimated,0)
+total.28.treat <- form(total.28$cdc25p.ETU+total.28$cdc45p.reduced,0)
+total.28.cum <- form_ci(total.28$cases.estimated,total.28$cases.estimated.l95,total.28$cases.estimated.u95,0,res.95,res.95.spacer)
+
+total.56 <- total[total$type=="projection" & total$days.to.today==56,]
+total.56.cdcETU.res <- form_ci(total.56$cdc25p.ETU,total.56$cdc25p.ETU.l95,total.56$cdc25p.ETU.u95,0,res.95,res.95.spacer)
+total.56.cdcreduced.res <- form_ci(total.56$cdc45p.reduced,total.56$cdc45p.reduced.l95,total.56$cdc45p.reduced.u95,0,res.95,res.95.spacer)
+total.56.newcases <- form(total.56$new.cases.estimated,0)
+total.56.treat <- form(total.56$cdc25p.ETU+total.56$cdc45p.reduced,0)
+total.56.cum <- form_ci(total.56$cases.estimated,total.56$cases.estimated.l95,total.56$cases.estimated.u95,0,res.95,res.95.spacer)
+
+last.observed.date <- total$date[!is.na(total$cases.observed)]
+last.observed.date <- last.observed.date[length(last.observed.date)]
+last.obs.56min <- as.character(as.Date(last.observed.date)-55)
+
+total.end.nov <- total[total$type=="projection" & total$date==as.Date("2014-11-30"),]
+total.end.nov.cases.reported <- form(total.end.nov$cases.reported,0)
+total.end.nov.cases.estimated <- form(total.end.nov$cases.estimated,0)
+
+sierra.end.nov <- sierra[sierra$type=="projection" & sierra$date==as.Date("2014-11-30"),]
+sierra.end.nov.cases.estimated <- form(sierra.end.nov$cases.estimated,0)
+
+liberia.end.nov <- liberia[liberia$type=="projection" & liberia$date==as.Date("2014-11-30"),]
+liberia.end.nov.cases.estimated <- form(liberia.end.nov$cases.estimated,0)
+
+table.to.print <- total[total$type=="projection" & (total$day==0 | total$day==28 | total$day==56),]
+
+
+
+rotate.table <- function(table1){
+  for(i in 1:ncol(table1)) for(j in 1:nrow(table1)) for(k in 1:10) table1[j,i] <- gsub("  "," ",table1[j,i])
+  for(i in 1:ncol(table1)) for(j in 1:nrow(table1)) table1[j,i] <- gsub("\\( ","\\(",table1[j,i])
+  table1.names <- table1[1,]
+  table1 <- table1[-1,]
+  table1 <- as.data.frame(t(table1))
+  for(i in 1:ncol(table1)) table1[,i] <- as.character(table1[,i])
+  table1 <- table1[,c(3,2,1)]
+  
+  table1r <- "a"
+  
+  for(j in 1:nrow(table1)){
+    firstblank <- table1[j,]
+    for(i in 1:length(firstblank)) firstblank[,i] <- "-"
+    first <- table1[j,]
+    second <- table1[j,]
+    for(i in 1:length(first)) if(length(grep(")",first[,i]))>0) first[,i] <- str_extract(first[,i],"^[ 0-9\\.]*")
+    for(i in 1:length(second)) if(length(grep(")",second[,i]))>0){
+      second[,i] <- gsub(first[,i],"",second[,i])
+      } else {
+        second[,i] <- NA
+      }
+    newdata <- data.frame(table1.names[j],rbind(first,second,firstblank))
+    names(newdata) <- c("Variable",as.character(table1[1,]))
+    newdata$Variable[2:3] <- ""
+    if(is.character(table1r)){
+      table1r <- newdata
+    } else table1r <- rbind(table1r,newdata)
+  }
+  
+  table1r <- na.omit(table1r)
+  table1.names <- names(table1r)
+  table1r <- table1r[-1,]
+  for(i in 2:nrow(table1r)) if(table1r$Variable[i-1]==table1r$Variable[i]) table1r$Variable[i] <- ""
+  table1r <- table1r[-1,]
+  table1r <- table1r[-nrow(table1r),]
+  table1r <- table1r[table1r[,2]!="-",]
+  res <- list()
+  res[["table"]] <- table1r
+  res[["names"]] <- table1.names
+  return(res)
+}
+
+  table2 <- readRDS("table_persons_sierra.RDS")
+  table3 <- readRDS("table_etu_sierra.RDS")
+  table4 <- readRDS("table_supplies.RDS")
+
+table1r <- rotate.table(results.table)
+table1.names <- table1r[["names"]]
+table1r <- table1r[["table"]]
+
+table2r <- rotate.table(table2)
+table2.names <- table2r[["names"]]
+table2r <- table2r[["table"]]
+
+table3r <- rotate.table(table3)
+table3.names <- table3r[["names"]]
+table3r <- table3r[["table"]]
+
+table4r <- rotate.table(table4)
+table4.names <- table4r[["names"]]
+table4r <- table4r[["table"]]
+
+total.international.people <- table2r[nrow(table2r)-1,4]
+total.people <- table3r[nrow(table3r)-1,4]
+today.total.doctors <- as.numeric(table3r[8,2])
+today.total.hygienists <- as.numeric(table3r[6,2])
+today.total.nurse <- as.numeric(table3r[4,2])
+today.total.support <- as.numeric(table3r[10,2])
+today.total.people <- as.numeric(table3r[nrow(table3r)-1,2])
+today.28.total.people <- as.numeric(table3r[nrow(table3r)-1,3])
+today.56.total.people <- as.numeric(table3r[nrow(table3r)-1,4])
+
+table5 <- readRDS("table_persons_guinea.RDS")
+table5r <- rotate.table(table5)
+table5.names <- table5r[["names"]]
+table5r <- table5r[["table"]]
+
+table6 <- readRDS("table_etu_guinea.RDS")
+table6r <- rotate.table(table6)
+table6.names <- table6r[["names"]]
+table6r <- table6r[["table"]]
+
+table7 <- readRDS("table_persons_liberia.RDS")
+table7r <- rotate.table(table7)
+table7.names <- table7r[["names"]]
+table7r <- table7r[["table"]]
+
+table8 <- readRDS("table_etu_liberia.RDS")
+table8r <- rotate.table(table8)
+table8.names <- table8r[["names"]]
+table8r <- table8r[["table"]]
+
+table9 <- readRDS("table_persons_sierra.RDS")
+table9r <- rotate.table(table9)
+table9.names <- table9r[["names"]]
+table9r <- table9r[["table"]]
+
+table10 <- readRDS("table_etu_sierra.RDS")
+table10r <- rotate.table(table10)
+table10.names <- table10r[["names"]]
+table10r <- table10r[["table"]]
+
+rate_function <- function(pt,time){
+  time <- (1-pt)*0.3*16.8+(1-pt)*0.7*9.2+pt*time
+  return(1/time)
+}
+
+x <- gen_df_and_skeleton(c("treated","time","rate"))
+intervention <- x[[1]]
+skeleton <- x[[2]]
+for(pt in seq(0,1,0.1)) for(time in seq(0,10,1)){
+  skeleton$treated <- as.character(pt*100)
+  skeleton$time <- as.character(time)
+  skeleton$rate <- rate_function(pt,time)
+  intervention <- rbind(intervention,skeleton)
+}
+
+plot.intervention <- list()
+
+intervention$place <- "\nLiberia"
+intervention$effective <- "Not effective"
+intervention$effective[intervention$rate>rate_function(0.4,5)*as.numeric(liberia.R0)] <- "Effective"
+plot.intervention[[1]] <- intervention
+
+intervention$place <- "\nSierra Leone"
+intervention$effective <- "Not effective"
+intervention$effective[intervention$rate>rate_function(0.4,5)*as.numeric(sierra.R0)] <- "Effective"
+plot.intervention[[2]] <- intervention
+
+intervention$place <- "\nGuinea"
+intervention$effective <- "Not effective"
+intervention$effective[intervention$rate>rate_function(0.4,5)*as.numeric(guinea.R0)] <- "Effective"
+plot.intervention[[3]] <- intervention
+
+plot.intervention <- rbindlist(plot.intervention)
+plot.intervention$treated <- factor(plot.intervention$treated,levels=as.character(seq(0,100,10)))
+plot.intervention$time <- factor(plot.intervention$time,levels=as.character(seq(0,10,1)))
+
+plot.intervention$effective <- factor(plot.intervention$effective,levels=c("Not effective","Effective"))
+plot.intervention$place <- factor(plot.intervention$place,levels=c("\nSierra Leone","\nLiberia","\nGuinea"))
+
+q <- ggplot(plot.intervention[plot.intervention$place=="\nSierra Leone",],aes(x=treated,y=time,fill=effective))
+q <- q + geom_tile(alpha=0.7)
+q <- q + geom_point(aes(x="70",y="5",shape="CDC target"),col="black",size=30)
+q <- q + geom_point(aes(x="40",y="5",shape="Current"),col="black",size=30)
+#q <- q + facet_wrap(~place,scales="free",ncol=1)
+q <- q + scale_shape_manual("",values=c("CDC target"=18,"Current"=16))
+q <- q + scale_fill_brewer("",palette="Set1")
+q <- q + scale_x_discrete("\nPercent treated")
+q <- q + scale_y_discrete("Days to treatment")
+q <- q + guides(fill = guide_legend(reverse = FALSE, override.aes=list(shape=NA)))
+q <- q + guides(shape = guide_legend(reverse = TRUE))
+q <- format_plot(q,6,10,stripes=TRUE)
+png(paste(today.character,"/",today.character,"_interventions.png",sep=""),width=3508,height=2480)
+print(q)
+dev.off()
+
+
+```
+Projected treatment capacity needs in Sierra Leone
+====================
+Richard A White$^{1,2*}$, Emily MacDonald$^{1*}$, Birgitte de Blasio$^{1,3}$, Karin Nygard$^1$, Line Vold$^1$, John-Arne Rottingen$^4$
+
+1. Department of Infectious Disease Epidemiology, Norwegian Institute of Public Health, Oslo, Norway
+2. Department of Health Statistics, Norwegian Institute of Public Health, Oslo, Norway
+3. Oslo Centre for Biostatistics and Epidemiology, Department of Biostatistics, Institute of Basic Medical Sciences, University of Oslo, Norway
+4. Division of Infectious Disease Control, Norwegian Institute of Public Health, Oslo, Norway
+
+$*$ Indicates joint first authorship
+
+__Corresponding author:__
+
+__Mailing address:__
+
+> Department of Infectious Disease Epidemiology
+>
+> Norwegian Institute of Public Health
+>
+> Postboks 4404 Nydalen
+> 
+> NO-0403 Oslo, Norway
+
+__Phone number:__
+
+__Fax number:__ +47 2107 6513
+
+__Phone number:__
+
+__Email address:__
+
+Abstract
+====================
+__Background:__ The ongoing outbreak of Ebola Virus Disease in West Africa requires immediate and sustained input from the international community in order to curb transmission. The CDC has produced a model that indicates that to end the outbreak by pushing the reproductive number below one, 25% of the patients must be placed in an Ebola Treatment Unit (ETC) and 45% must be isolated in community settings in which risk of disease transmission is reduced and safe burials are provided. In order to provide firmer targets for the international response in Sierra Leone, we estimated the national and international personnel and treatment capacity that may be required to reach these percentages.
+
+__Methods:__ We developed a compartmental SEIR model that was fitted to WHO data and local data allowing the reproductive number to change every 8 weeks to forecast the progression of the EVD epidemic in Sierra Leone. We used the previously estimated 2.5x correction factor estimated by the CDC to correct for underreporting. Number of personnel required to provide treatment for the predicted number of cases was estimated using UNMEER and UN OCHA requests for resources required to meet the CDC target of 70% isolation.
+
+__Results:__ As of today (`r today`), we estimate that there are `r total.today.T.res` EVD active cases in treatment, with an additional `r total.today.I.res` EVD cases unreported and untreated. To reach the CDC targets today, we need `r total.today.cdcETU.res` cases in ETCs and `r total.today.cdcreduced.res` at home or in a community setting with a reduced risk for disease transmission. In 28 days (`r today.plus.28`), we will need `r total.28.cdcETU.res` EVD cases in ETCs and `r total.28.cdcreduced.res` EVD cases at reduced risk of transmission. If the current transmission rate is not reduced, up to `r total.people` personnel in total will be required in 56 days (`r today.plus.56`) to operate ETCs according to our model.
+
+__Conclusions:__ The current outbreak will require massive input from the international community in order to curb the transmission through traditional containment mechanisms by breaking the chains of transmission in Sierra Leone. If sufficient treatment facilities, healthcare workers and support personnel are not rapidly deployed, the increasing number of cases will be overwhelming.In addition to supporting isolation and treatment mechanisms, other viable control options, such as the development of an effective vaccine, should be supported.
+
+Funding statement
+====================
+This research received no specific grant from any funding agency, commercial or not-for-profit sectors. The authors have declared that no competing interests exist.
+
+Background
+====================
+
+Since December 2013, an outbreak of Ebola virus disease (EVD) of unprecedented size and geographic extent has been ongoing in West Africa. As of 2014-12-03, over 17,000 cases and 6,000 deaths have been reported to the World Health Organization by the three most affected countries, Guinea, Liberia and Sierra Leone. Cases have also been reported in Nigeria, Senegal, the United States, Spain and, most recently, Mali. Since its first case was reported in May 2014, WHO reports that Sierra Leone has reported 7312 cases and 1583 deaths. In order to interrupt the chains of transmission and prevent further spread, a number of control measures have been initiated, including establishing Ebola Treatment Centres (ETCs), increasing case ascertainment and contact tracing, and promoting safe burial practices (ref). Although these approaches have been used to successfully curb previous outbreaks of EVD in Central and Eastern Africa, for the first time, EVD has spread throughout densely populated urban areas among highly mobile populations who have no previous knowledge of the disease. The current outbreak will therefore require a sustained, innovative and flexible approach to achieve containment.
+
+The international response to this crisis has been widely criticized as slow and insufficient (ref). As early as June 2014, Medecins Sans Frontieres (MSF), an organization which has been involved in providing treatment from the early stages of the outbreak, has been requesting large-scale and sustained support from the international community. Despite these requests, the response has been slow to materialize. However, on 2014-08-08, the World Health Organization declared the outbreak to be a Public Health Emergency of International Concern (PHEIC) [1]. On 18 September the UN Security Council determined that the outbreak was a "threat to international peace and security" and announced the creation of the United Nations Mission for Ebola Emergency Response (UNMEER) [2]. This was the first time in history that the UN has created a mission for a public health concern. Even with these actions the outbreak continued to grow in magnitude and the potential for spread to neighbouring countries is of serious concern.
+
+Several models have been developed to forecast the progression of the outbreak, with and without intervention options. A model produced by the WHO's Ebola Response Team, published September 2014, aimed to document trends in the epidemic and project expected case numbers for the coming weeks. Based on data reported to the WHO from Guinea, Liberia, and Sierra Leone until 14 September 2014, this model concluded that there was a possibility that for the medium term EVD may become endemic among the human population of West Africa [3]. A model produced by the CDC using data from Liberia and Sierra Leone until 29 August 2014 aimed to galvanize support for multinational intervention by demonstrating the large long-term costs of delay and giving estimates of the size of the control interventions needed [4]. The CDC model concluded that to end the outbreak by pushing the reproductive number below one, 25% of the patients must be placed in an Ebola Treatment Centre (ETC) and 35% isolated in community settings in which risk of disease transmission is reduced and safe burials are provided [4]. This model reinforced that the cost of delay is devastating - the number of cases doubles every 20 days, making the 70% target even harder to achieve. 
+
+Since the creation of UNMEER, the international community has committed extensive resources to controlling the outbreak, including establishing ETCs in order to ensure patients are isolated. Although only a portion of the centres are operational at this time, the ETCs are designed to provide care to suspected and confirmed cases while preventing infection of healthcare workers and members of the community. Community Care Centres have also been promoted as a means to ensure patients are isolated in areas with insufficient ETC bed capacity or in remote areas without access to ETCs. ETCs can range in size from 20 to 400 beds, while CCCs are smaller, with 8 to 15 beds per facility. UNMEER and WHO had a 60 day target of having that capacity to isolate at least 70% of patients and ensure 70% of cases who die from EVD are safely buried by 1 December 2014 (1). These targets were based on the assumption that 25% of cases would be isolated in ETCs while 45% would be isolated in CCCs. The overall goal is to ensure isolation of 100% of cases and provide safe burials to 100% of patients who die from EVD by 2015-01-01 (90-day target). As of 2014-12-03, WHO reports that a total of 517 treatment and isolation beds are operational in Sierra Leone, of which 190 beds are provided in CCCs. In addition, there are 8 ETCs currently under construction. 
+
+While multiple efforts have been made to model and forecast the epidemic, few have explicitly quantified the number of treatment places necessary to achieve the 70% target set by the CDC. Lewnard et al. developed a transmission model to assess the effectiveness of expanding EVD treatment centres, increasing case ascertainment and allocating protective household kits in Montserrado County, Liberia (10). The authors found that the number of beds required to contain the outbreak substantially exceeded those pledged by the international community. However, similar projections have not been developed for Sierra Leone.
+
+We use a flexible mathematical model to estimate the number of treatment places, personnel and equipment needed to obtain the 70% target set by the CDC in Sierra Leone over the next two months (from `r today` to `r today.plus.28`) in order to provide firmer targets for the international response. We also reexamine what targets for treatment or isolation within a specified time frame are necessary to acheive a reproductive number below one.
+
+Methods
+====================
+
+Outbreak Data
+---------------------
+
+To fit our model, we used the public data released by the World Health Organization (ref) from 2014-03-22 until 2014-08-13, after which we obtained approximately daily counts from the public press releases from the Sierra Leonean Ministry of Health (2014-05-27 to `r last.observed.date`). For the purposes of our models, we considered all confirmed, suspected, or probable cases to be EVD cases.
+
+Model
+---------------------
+
+We developed a compartmental model to describe the outbreaks in Sierra Leone (Figure 1). Briefly, the population is divided into six compartments, with average rates and average time periods taken from the recently published WHO Ebola Response Team model (ref).
+
+Susceptible individuals (S) may become Exposed (E) after contact with infectious material. After an average of 11.4 days ($\tau_a$), Exposed persons (E) then transition into non-reported Infected persons (I). Infected persons (I) may become Treated (T) after an average of 5 days ($\tau_{I \rightarrow T}$) (in which case they are registered as an EVD case and become non-infectious), or they may Recover (R) after an average of 5+11.8 days ($\tau_{I \rightarrow R}$), or Die (D) after an average of 5+4.2 days ($\tau_{I \rightarrow D}$). Treated (T) persons may either Recover (TR) after an average of 11.8 days ($\tau_{T \rightarrow TR}$) or Die (TD) after an average of 4.2 days ($\tau_{T \rightarrow TD}$). The case fatality rate was taken to be 70% (ref). The recently published CDC model estimated that the reporting quotient was set to 1/2.5=40% (on 2014-08-25). We used this number to crudely assume that 40% of the population have been reported, and then treated in some fashion (either submission to an ETC or isolated in a community setting or at home). Therefore, we estimated probability of Infected persons (I) becoming Treated (T) ($P_T$) to be 40%. Due to poor data quality, we could not assign a certain proportion to ETCs versus community isolation versus home isolation and thus considered that all cases were non-infectious after being reported.
+
+__Figure 1. SEIR model__
+```{r myfile-1-plot, echo = F, results = 'asis'}
+cat('\n![](Figure1.png)\n')
+```
+ 
+In mathematical terms, the transition equations describing the model are given as:
+
+$$
+\frac{dS}{dt}=-\frac{\beta I S}{N}
+$$
+
+$$
+\frac{dE}{dt}=\frac{\beta I S}{N} - aE
+$$
+
+$$
+\frac{dI}{dt}=aE - \gamma_{I \rightarrow}I
+$$
+
+$$
+\frac{dR}{dt}=\gamma_{I \rightarrow R}I
+$$
+
+$$
+\frac{dD}{dt}=\gamma_{I \rightarrow D}I
+$$
+
+$$
+\frac{dT}{dt}=\gamma_{I \rightarrow T}I - (\gamma_{T \rightarrow TR} + \gamma_{T \rightarrow TD})T
+$$
+
+$$
+\frac{dTR}{dt}=\gamma_{T \rightarrow TR}T
+$$
+
+$$
+\frac{dTD}{dt}=\gamma_{T \rightarrow TD}T
+$$
+
+Where
+
+$$
+a = \frac{1}{\tau_a}
+$$
+
+$$
+\tau_{I \rightarrow} = (1-P_T) \times 0.3 \times \tau_{I \rightarrow R} + (1-P_T) \times 0.7 \times \tau_{I \rightarrow D} + P_T \tau_{I \rightarrow T}
+$$
+
+$$
+\gamma_{I \rightarrow} = \frac{1}{\tau_{I \rightarrow}}
+$$
+
+$$
+\gamma_{I \rightarrow R} = \gamma_{I \rightarrow} \frac{(1-P_T)\times 0.3 \times \tau_{I \rightarrow R}}{\tau_{I \rightarrow}}
+$$
+
+$$
+\gamma_{I \rightarrow D} = \gamma_{I \rightarrow} \frac{(1-P_T)\times 0.7 \times \tau_{I \rightarrow D}}{\tau_{I \rightarrow}}
+$$
+
+$$
+\gamma_{I \rightarrow T} = \gamma_{I \rightarrow} \frac{P_T\tau_{I \rightarrow T}}{\tau_{I \rightarrow}}
+$$
+
+$$
+\tau_{T \rightarrow} = 0.3 \tau_{T \rightarrow TR} + 0.7 \tau_{T \rightarrow TD}
+$$
+
+$$
+\gamma_{T \rightarrow} = \frac{1}{\tau_{T \rightarrow}}
+$$
+
+$$
+\gamma_{T \rightarrow TR} = \gamma_{T \rightarrow} \frac{0.3 \tau_{T \rightarrow TR}}{\tau_{T \rightarrow}}
+$$
+
+$$
+\gamma_{T \rightarrow TD} = \gamma_{T \rightarrow} \frac{0.7 \tau_{T \rightarrow TD}}{\tau_{T \rightarrow}}
+$$
+
+$$
+\beta = R0 \gamma_{I \rightarrow}
+$$
+
+More concisely, the above average times, rates, and probabilities are clearly defined in Tables 1-3, with sources listed.
+
+__Table 1. Probabilities, proportions, and populations in the SEIR model__
+
+|  Variable |  Value | Source |
+|-------------:|------------:|-------------:|
+| Case fatality rate | 0.7 | WHO model |
+| Probability of treatment/reported | $P_t=1/2.5=0.40$ on 2014/08/25 | CDC model |
+| Population of Sierra Leone | 6,319,000 | UNPOP 2012 |
+
+__Table 2. Average days spent in first compartment of the SEIR model when transitioning__
+
+|  Transition |  Average days spent in first compartment | Source |
+|-------------:|------------:|-------------:|
+| $E \rightarrow I$ | $\tau_a=11.4$ | WHO model |
+| $I \rightarrow T$ | $\tau_{I \rightarrow T}=5$ | WHO model|
+| $I \rightarrow R$ | $\tau_{I \rightarrow R}=5+11.8$ | Constructed |
+| $I \rightarrow D$ | $\tau_{I \rightarrow D}=5+4.2$ | Constructed |
+| $I \rightarrow T,R,D$ | $\tau_{I \rightarrow} = (1-0.4) \times 0.3 \times \tau_{I \rightarrow R} + (1-0.4) \times 0.7 \times \tau_{I \rightarrow D} + 0.4 \tau_{I \rightarrow T} = 8.9$ | Constructed |
+| $T \rightarrow TR$ | $\tau_{T \rightarrow TR}=11.8$ | WHO model|
+| $T \rightarrow TD$ | $\tau_{T \rightarrow TD}=4.2$ | WHO model|
+| $T \rightarrow TR,TD$ | $\tau_{T \rightarrow} = 0.3 \times \tau_{T \rightarrow TR} + 0.7 \times \tau_{T \rightarrow TD} = 6.5$ | Constructed |
+
+__Table 3. Rates used in the SEIR model__
+
+|  Transition |  P(transition) |  Rate |
+|-------------:|-------------:| -------------:|
+| $E \rightarrow I$ | 1 | $a = \frac{1}{\tau_a} = 0.088$ |
+| $I \rightarrow T, R, D$ | 1 | $\gamma_{I \rightarrow } = \frac{1}{\tau_{I \rightarrow}} = 0.112$ |
+| $I \rightarrow R$ | $(1-0.4)\times 0.3$ | $\gamma_{I \rightarrow R} = \gamma_{I \rightarrow} \frac{(1-0.4)\times 0.3 \times \tau_{I \rightarrow R}}{\tau_{I \rightarrow}} = 0.038$ |
+| $I \rightarrow D$ | $0.4 \times 0.7$ | $\gamma_{I \rightarrow D} = \gamma_{I \rightarrow} \frac{(1-0.4)\times 0.7 \times \tau_{I \rightarrow D}}{\tau_{I \rightarrow}} = 0.049$ |
+| $I \rightarrow T$ | $0.4$ | $\gamma_{I \rightarrow T} = \gamma_{I \rightarrow} \frac{0.4 \tau_{I \rightarrow T}}{\tau_{I \rightarrow}} = 0.025$ |
+| $T \rightarrow TR, TD$ | 1 | $\gamma_{T \rightarrow } = \frac{1}{\tau_{T \rightarrow}} = 0.154$ |
+| $T \rightarrow TR$ | 0.3 | $\gamma_{T \rightarrow TR} = \gamma_{T \rightarrow} \frac{0.3 \tau_{T \rightarrow TR}}{\tau_{T \rightarrow}} = 0.084$ |
+| $T \rightarrow TD$ | 0.7 | $\gamma_{T \rightarrow TD} = \gamma_{T \rightarrow} \frac{0.7 \tau_{T \rightarrow TD}}{\tau_{T \rightarrow}} = 0.070$ |
+
+Model Fitting
+---------------------
+
+To estimate R0 and beginning starting values for the number of persons in compartments E and I, we implemented an ensemble trajectory model with parameters allowed to change every 2*28=56 days. The choice of 56 days was made based on preliminary simulations. When investigating the effect of varying the time interval with fixed transmissibility, we found that allowing the parameters to change every 28 days was too flexible and gave poor forward projections, while 72 days was not flexible enough and gave a poor model fit. Briefly, a matrix of plausible parameter values were generated (R0=0.7, 0.8, ..., 2.4; E=2, 12, ..., 82; I=2, 12, ..., 82). For each parameter combination ($\Gamma$), the above model was fitted for the first 56 days. We then evaluated the fit of the model using the following formula ($lddp$ is the least deviation per datum):
+
+$$
+ldpp(\Gamma)=\frac{1}{N} \sum_{i=1}^N |Obs_i-Est_i |
+$$
+
+Where $Obs_i$ was the observed cumulative number of cases at data point i, and $Est_i$ was the estimated cumulative number of cases at data point i.
+
+From this, we calculated the probability that the outbreak was caused by each parameter combination:
+
+$$
+P(outbreak was caused by \Gamma) =  \frac{1}{C}exp \left(- \frac{lddp(\Gamma)-min(lddp(\Gamma)}{2 \sigma^2} \right)
+$$
+
+Where C was a normalisation constant, and $\sigma=sqrt(0.2 \times (lddp(\Gamma)-min(lddp(\Gamma)))$. Ref: Real-Time Modeling and Prediction of Unfolding Epidemics. LMA Bettencourt.
+
+For each parameter combination that had support in the first 56 days of the outbreak, we fitted another 18 models (R0=0.7, 0.8, ..., 2.4) and repeated the same procedure. This algorithm was run until it reached the end of the reported data, at which point the probability of the outbreak being caused by each trajectory was calculated. Each trajectory was then forecast to the present day (`r today`) and 56 days beyond, with estimated probabilities assigned.
+
+To obtain estimates for each compartment, the differential equations listed above were solved using the "lsoda" function in R (version 3.1.1). From the compartmental model, we extracted the number of estimated cases, new estimated cases each day, estimated reported cases, new estimated reported cases each day, exposed persons currently in the incubation period, EVD cases currently in treatment and non-infectious, and EVD cases currently unreported and infectious in the community.
+
+Intervention
+---------------------
+We implemented a simpler version of the CDC's recommended proportions (25% to ETCs and 45% in community centres) of isolated cases to test their efficacy. Again due to poor data quality and uncertainty regarding the situation on the ground, we considered that all cases were grouped together in a single non-infectious state after being reported. We investigated the impact of 0, 10, ..., 90, 100% of infectious EVD cases receiving treatment or being isolated after 0, 1, ..., 10 days on average. This is in contrast to the baseline projection where 40% are treated (i.e. considered reported and non-infectious) after an average of 5 days. We observed which of the interventions resulted in a reproductive number below one, which is necessary for ending the epidemic.
+
+Quantification of resources needed
+---------------------
+In order to estimate the required number of personnel per ETC and CCC, figures for optimal staffing were obtained from UNMEER's overview of needs and requirements (2).Most organizations calculate that upwards of 110 healthcare personnel, including doctors, nurses and nurses' aids, and 100 other personnel, including logistics, water and sanitation, waste teams, cooks, laundry and cleaners, drivers and security are required for a 100-bed ETC (12). For the purposes of this model, four types of personnel are included: doctors, nurses/paramedics, hygienists and support staff. 
+
+Results
+====================
+
+Model Fit
+---------------------
+
+From a visual observation, the model fit is sufficient (Figure 2). We also performed a goodness of fit test by regressing the new case residuals (new daily predicted cases minus new daily observed cases) against time, and found there to be no significant slope nor intercept.
+
+__Figure 2. Total estimates of cumulative cases (per `r today`)__
+```{r myfile-2-plot, echo = F, results = 'asis'}
+cat(paste('\n![](',today,'/',today,'_log_validation_sierra.png)\n',sep=""))
+```
+
+
+Reproductive number
+---------------------
+
+Using the last 56 days of outbreak data (`r last.obs.56min` to `r last.observed.date`), we estimated that the effective reproductive number was `r sierra.R0.res` in Sierra Leone. `r final.sentence`
+
+__Table 4. Model estimates__
+```{r table1, echo = F, results = 'asis'}
+kable(table1r,row.names=FALSE,col.names=table1.names,align="c",padding=0,format="markdown")
+```
+
+Predictions
+---------------------
+
+Per today (`r today`), we estimate that there are `r total.today.T.res` EVD active cases in treatment, with an additional `r total.today.I.res` EVD cases unreported and untreated (Table 4). Furthermore, we have estimated that there are `r total.today.newcases` new symptomatic cases every day (Table 4).
+
+If the outbreak continues with a reproductive number of `r sierra.R0.res`, in 28 days (`r today.plus.28`) this number will increase to `r total.28.newcases` new cases every day, corresponding to a total of `r total.28.cum` cumulative total cases (Table 4). In a further 28 days (`r today.plus.56`) this will increase to `r total.56.newcases` new cases every day, corresponding to a total of `r total.56.cum` cumulative total cases (Table 4).
+
+Achieving CDC targets for 70% containment
+---------------------
+
+To reach the CDC targets today, we need `r total.today.cdcETU.res` cases in ETCs and `r total.today.cdcreduced.res` at home or in a community setting such that there is a reduced risk for disease transmission through effective isolation (Table 4 and Figure 3). If the outbreak continues with a reproductive number of `r sierra.R0.res`, in 28 days (`r today.plus.28`), we will need `r total.28.cdcETU.res` EVD cases in ETCs and `r total.28.cdcreduced.res` EVD cases at reduced risk of transmission (Table 4 and Figure 3). In a further 28 days (`r today.plus.56`) we will need `r total.56.cdcETU.res` EVD cases in ETCs and `r total.56.cdcreduced.res` cases at reduced risk of transmission (Table 4 and Figure 3).
+
+__Figure 3. Estimates of needed capacity corresponding to the CDC goals of 25% of cases in ETCs and 45% of cases in reduced transmission settings (per `r today`)__
+```{r myfile-3-plot, echo = F, results = 'asis'}
+cat(paste('\n![](',today,'/',today,'_CDC_limits_sierra.png)\n',sep=""))
+```
+
+Quantification of resources needed
+--------------------
+
+__Figure 4. Estimates of personnel needed to operate ETUs with CDC goal of 25% of cases in ETCs (per `r today`)__
+```{r myfile-5-plot, echo = F, results = 'asis'}
+cat(paste('\n![](',today,'/',today,'_staff_ETU.png)\n',sep=""))
+```
+
+As of today (`r today`), we estimate that `r today.total.people` staff members are needed to operate ETCs that cover 25% of cases in Sierra Leone (Figure 4). This includes `r today.total.doctors` doctors, `r today.total.hygienists` hygienists, `r today.total.nurse` nurses/paramedics, and `r today.total.support` support staff. If this incidence of cases increases as projected and the targets of 25% of cases in ETCs is maintained, `r today.28.total.people` staff members will be required in 28 days (`r today.plus.28`), and `r today.56.total.people` staff members will be required in an additional 28 days (`r today.plus.56`).
+
+Intervention
+---------------------
+We found that 70% containment/treatment after the five days baseline was sufficient to contain the epidemic. More specifically, 40% containment/treatment after one day, 50% after three days, 60% after five days, 70% after six days, and 90% after seven days were all sufficient scenarios (Figure 5). However, these numbers are based upon the uncertain estimate that currently 40% of cases are non-infectious, which may not be applicable.
+
+__Figure 5. Ability of different intervention scenarios to achieve a reproductive number below one (per `r today`)__
+```{r myfile-6-plot, echo = F, results = 'asis'}
+cat(paste('\n![](',today,'/',today,'_interventions.png)\n',sep=""))
+```
+
+Longevity of Model
+---------------------
+One problem with outbreak models is that they become outdated very quickly as the outbreak progresses. We therefore present today's numbers (`r total.today.cdcETU.res` cases in ETCs and `r total.today.cdcreduced.res` cases in reduced transmission) as the minimum needed to reverse the outbreak. This is because even if the outbreak slows, today's numbers will still need to be achieved to push the reproductive number below one, unless another way of reducing transmission is found. Thus in the absence of effective vaccines or other preventative measures, `r total.today.cdcETU.res` cases in ETCs and `r total.today.cdcreduced.res` cases in reduced transmission should remain as firm minimum targets for the international community, and will likely need to be exceeded given the growing context of the outbreak.
+
+Issues with assumption of 40% of treatment of cases
+---------------------
+One flaw of this model is that it assumes that after five days, 40% of the cases will be non-infectious due to some sort of treatment. If this assumption is incorrect, then our reproductive number estimate and Figure 5 will also be incorrect. However, our estimates for the number of cases (and thus the number of beds needed to reach the CDC targets) will still be correct, as this assumption only affects the relationship between the number of currently infectious cases and how they infect the susceptible. It does not affect the overall number of cases currently alive. These unaffected numbers are then multiplied against the 25%/45% CDC numbers and we obtain our estimates, independent of whether our treatment proportion or reproductive number are correctly estimated.
+
+Because of this, we do not place too much emphasis on the interpretation of our reproductive number nor Figure 5 in this manuscript.
+
+Detailed results and projections
+--------------------
+More detailed results (including daily projections for the next six months) can be found in the supplemental materials.
+
+Discussion
+====================
+
+As of `r today`, the outbreak of EVD in Sierra Leone is not yet under control and the incidence continues to increase. Although there are significant challenges associated with collecting and interpreting data in this context, our findings reinforce that the capacity for treatment and isolation is not yet sufficient to successfully break the chains of transmission in Sierra Leone.
+
+Although the most recent Ebola Response Roadmap Situation Update suggests that more than 70% of cases are being isolated in most affected districts, only 35% of planned ETC bed capacity and 16% of planned CCC bed capacity are operational in Sierra Leone (1), Our model indicates that there are currently `r total.today.T.res` cases in treatment, with an additional `r total.today.I.res` cases unreported, which surpasses the 707 beds that are currently available, of which 517 are in ETCs and 190 are in CCCs. Our model indicates that if `r total.today.cdcETU.res` cases in ETCs and `r total.today.cdcreduced.res` cases in reduced transmission is not achieved, the reproductive number will not be pushed below one If the planned treatment and isolation facilities do not rapidly become operational, the situation will be further exacerbated, with the number of patients requiring isolation facilities reaching `r total.28.cdcETU.res` cases in ETCs and `r total.28.cdcreduced.res` cases in CCCs in 56 days.
+
+As the available data indicates considerable variability in incidence sub-nationally, more flexible approaches to isolation and treatment may be required. There are indications that ETCs in some areas are not operating at full capacity as control measures have been successful in some districts. As the establishment of ETCs can be time-consuming and the facilities themselves can be difficult to relocate to meet needs of the developing outbreak, delays associated with establishing semi-permanent structures as ETCs may ultimately lead to further spread of the outbreak. It is also imperative to ensure that resources are distributed in areas with most need, which is an inherent challenge as the epidemiology of the outbreak changes. Our model reinforces that delays in intervention will lead to substantial increases in the required treatment capacity and manpower and that the speed of isolation after symptom onset among cases reduces the proportion that need to be isolated in order to reduce transmission. Other models have also highlighted the importance of ensuring sufficient resources to provide isolation for infected individuals within 4 days of symptom onset (13.)
+
+Organizations such as MSF are now reporting that new approaches that allow for rapid and flexible response are required at this stage in the outbreak, allowing response teams to be rapidly deployed to hotspots (14). UNMEER will be developing a district-by-district approach to ensure that sufficient isolation capacity is available in all areas of the affected countries (15). Our findings also suggest that if transmission is not reduced, the number of international staff required to run ETCs will increase substantially and it is likely that it will be difficult to recruit sufficient international staff to run ETCs that can accommodate 25% of patients.  As the lack of CCC bed capacity is particularly notable in the WHO status updates, more focus on community-based interventions may address some of the shortfalls of ETCs. Although CCCs often have less bed capacity than ETCs, they are frequently placed in areas not served by ETCs and can alleviate pressure in areas where ETCs are at capacity (15). In addition, fewer personnel are required to run CCCs than ETCs as in CCCs basic patient needs such as food are generally provided for by friends and family of patients rather than by CCC staff. Although ETCs are an essential component of the response, increased coverage by CCCs will potentially allow for a more rapid response and better access to isolation facilities in remote areas.
+
+
+One significant challenge with outbreak models is that they become outdated very quickly as the outbreak progresses. We therefore present today's numbers (`r total.today.cdcETU.res` cases in ETCs and `r total.today.cdcreduced.res` cases in reduced transmission) as the minimum needed to reverse the outbreak. This is because even if the outbreak slows, today's numbers will still need to be achieved to push the reproductive number below one, unless another way of reducing transmission is found. Thus in the absence of effective vaccines or other preventative measures, `r total.today.cdcETU.res` cases in ETCs and `r total.today.cdcreduced.res` cases in settings leading to reduced transmission should remain as firm minimum targets for the international community, and will likely need to be exceeded given the growing context of the outbreak.
+
+This study has a number of limitations. First and foremost, we model at the country level and only include data from Sierra Leone. This masks many geographical variations that may be happening at a more discrete level. Secondly, we assume that registered cases are in treatment and thus non-infectious. While it was assumed by the WHO model that hospitalised cases were non-infectious, it is well documented that healthcare workers are continually being infected (although it has been noted that the majority of the healthcare workers were infected at home or in their local community). We are also uncertain as to our assumption that registered cases are in treatment; considering the overwhelmed nature of the West African health system. It is entirely likely that a great number of the new cases come from counting dead bodies. In addition, this model is based on reported case data, which has significant underreporting that varies over time and geographical region. Our model attempts to correct for underreporting, however, it is not possible to validate how accurately we have done so. Finally, our model assumes that the outbreak will continue growing as it has in the past - while unlikely, the recent international efforts may have had some effect that will take place in the near future.
+
+One flaw of this model is that it assumes that after five days, 40% of the cases will be non-infectious due to some sort of treatment. If this assumption is incorrect, then our reproductive number estimate and Figure 5 will also be incorrect. However, our estimates for the number of cases (and thus the number of beds needed to reach the CDC targets) will still be correct, as this assumption only affects the relationship between the number of currently infectious cases and how they infect the susceptible. It does not affect the overall number of cases currently alive. These unaffected numbers are then multiplied against the 25%/45% CDC numbers and we obtain our estimates, independent of whether our treatment proportion or reproductive number are correctly estimated.
+
+Conclusion
+====================
+The largest outbreak of EVD in history is ongoing in Sierra Leone, with no indications as of `r today` that incidence is decreasing. Although concerted effort is being made by local authorities and the international community to stop transmission, current treatment and isolation facilities are insufficient. If the outbreak continues to spread, the response will be further complicated as the number of cases will overwhelm planned interventions. ETCs may not be flexible enough to accommodate the changing epidemiology of the outbreak and the number of international staff required to run sufficient facilities will be difficult to recruit. If the urgent need for isolation and treatment is not met, other control measures must be available, including community-based approaches to treatment and isolation, as well as development of a vaccine that can protect the susceptible population.
+
+
+
